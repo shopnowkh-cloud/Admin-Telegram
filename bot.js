@@ -19,7 +19,6 @@ const BTN = {
   CAMBODIA: "🇰🇭 Cambodia",
   THAILAND: "🇹🇭 Thailand",
   BALANCE:  "💰 Balance",
-  HISTORY:  "📋 History",
   CANCEL:   "❌ Cancel Number",
 };
 
@@ -30,8 +29,9 @@ const SERVICES = {
 
 function mainMenu(hasActive) {
   const rows = [
-    [BTN.CAMBODIA, BTN.THAILAND],
-    [BTN.BALANCE,  BTN.HISTORY],
+    [BTN.CAMBODIA],
+    [BTN.THAILAND],
+    [BTN.BALANCE],
   ];
   if (hasActive) rows.push([BTN.CANCEL]);
   return Markup.keyboard(rows).resize();
@@ -260,28 +260,6 @@ bot.hears(BTN.BALANCE, async (ctx) => {
   } catch (err) {
     await ctx.reply(`❌ Failed to get balance: ${err.message}`, mainMenu(sessions.has(ctx.from.id))).catch(() => {});
   }
-});
-
-bot.hears(BTN.HISTORY, async (ctx) => {
-  if (!isAdmin(ctx)) return;
-  const history = loadHistory();
-
-  if (history.length === 0) {
-    return ctx.reply("📋 No purchased numbers yet.", mainMenu(sessions.has(ctx.from.id))).catch(() => {});
-  }
-
-  const lines = history.slice(0, 20).map((e, i) => {
-    const date = formatDate(e.purchasedAt);
-    const code = e.code ? `🔑 \`${e.code}\`` : e.status;
-    return `${i + 1}\\. ${e.service} \\| 📱 \`${e.phone}\`\n    ${code} \\| 🕐 ${date}`;
-  });
-
-  const msg = `📋 *Purchased Numbers \\(last ${history.slice(0, 20).length}\\)*\n\n` + lines.join("\n\n");
-
-  await ctx.reply(msg, {
-    parse_mode: "MarkdownV2",
-    ...mainMenu(sessions.has(ctx.from.id)),
-  }).catch(() => {});
 });
 
 bot.hears(BTN.CANCEL, async (ctx) => {
