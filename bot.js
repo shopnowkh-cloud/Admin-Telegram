@@ -120,7 +120,6 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
 
   const timer = setInterval(async () => {
     try {
-      const elapsed = Math.floor((Date.now() - start) / 1000);
       const status  = await getStatus(id);
 
       if (status.startsWith("STATUS_OK")) {
@@ -171,7 +170,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
 
       await bot.telegram.editMessageText(
         chatId, waitingMsgId, null,
-        `⏳ *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}\n🕐 Elapsed: ${elapsed}s`,
+        `⏳ *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}`,
         { parse_mode: "Markdown" }
       ).catch(() => {});
 
@@ -206,7 +205,7 @@ async function handleGetNumber(ctx, serviceKey) {
 
     const waitMsg = await bot.telegram.sendMessage(
       chatId,
-      `⏳ *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}\n🕐 Elapsed: 0s`,
+      `⏳ *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}`,
       { parse_mode: "Markdown" }
     );
 
