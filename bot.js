@@ -266,7 +266,7 @@ bot.hears(BTN.HISTORY, async (ctx) => {
     return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
   }
 
-  const filtered = history.filter((e) => e.status !== "❌ Cancelled");
+  const filtered = history.filter((e) => e.status === "⏳ Waiting");
 
   if (filtered.length === 0) {
     return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
