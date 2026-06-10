@@ -1,5 +1,4 @@
 const { Telegraf, Markup } = require("telegraf");
-const fs = require("fs");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!BOT_TOKEN) { console.error("Missing TELEGRAM_BOT_TOKEN"); process.exit(1); }
@@ -9,11 +8,11 @@ const ADMIN_ID = parseInt(process.env.ADMIN_ID, 10);
 if (!API_KEY)   { console.error("Missing SMS_API_KEY"); process.exit(1); }
 if (!ADMIN_ID)  { console.error("Missing ADMIN_ID");   process.exit(1); }
 
-const BASE_URL     = "https://sms-x.org/stubs/handler_api.php";
-const HISTORY_FILE = "./history.json";
+const BASE_URL = "https://sms-x.org/stubs/handler_api.php";
 
 const bot      = new Telegraf(BOT_TOKEN);
 const sessions = new Map();
+let   history  = [];
 
 const BTN = {
   CAMBODIA: "🇰🇭 Cambodia",
@@ -40,37 +39,14 @@ function isAdmin(ctx) {
   return ctx.from && ctx.from.id === ADMIN_ID;
 }
 
-function loadHistory() {
-  try {
-    if (fs.existsSync(HISTORY_FILE)) {
-      return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
-    }
-  } catch (_) {}
-  return [];
-}
-
-function saveHistory(history) {
-  try {
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
-  } catch (err) {
-    console.error("Failed to save history:", err.message);
-  }
-}
-
 function addHistoryEntry(entry) {
-  const history = loadHistory();
   history.unshift(entry);
   if (history.length > 100) history.splice(100);
-  saveHistory(history);
 }
 
 function updateHistoryEntry(id, updates) {
-  const history = loadHistory();
   const idx = history.findIndex((e) => e.id === id);
-  if (idx !== -1) {
-    history[idx] = { ...history[idx], ...updates };
-    saveHistory(history);
-  }
+  if (idx !== -1) history[idx] = { ...history[idx], ...updates };
 }
 
 function formatDate(ts) {
@@ -260,7 +236,6 @@ bot.hears(BTN.BALANCE, async (ctx) => {
 
 bot.hears(BTN.HISTORY, async (ctx) => {
   if (!isAdmin(ctx)) return;
-  const history = loadHistory();
 
   if (history.length === 0) {
     return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
