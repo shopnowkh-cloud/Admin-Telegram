@@ -233,6 +233,15 @@ bot.hears(BTN.CANCEL, async (ctx) => {
   ).catch(() => {});
 });
 
+bot.on("text", async (ctx) => {
+  if (!isAdmin(ctx)) return ctx.reply("⛔ Access denied.", mainMenu(false)).catch(() => {});
+  const userId = ctx.from.id;
+  await ctx.reply(
+    `Choose a service:`,
+    { ...mainMenu(sessions.has(userId)) }
+  ).catch(() => {});
+});
+
 async function launch() {
   try {
     await bot.launch({
