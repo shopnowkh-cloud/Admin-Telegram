@@ -11,7 +11,7 @@ if (!ADMIN_ID)  { console.error("Missing ADMIN_ID");   process.exit(1); }
 const BASE_URL = "https://sms-x.org/stubs/handler_api.php";
 
 const bot      = new Telegraf(BOT_TOKEN);
-const sessions = new Map();
+const sessions = new Map(); // keyed by order id
 let   history  = [];
 
 const BTN = {
@@ -47,14 +47,6 @@ function addHistoryEntry(entry) {
 function updateHistoryEntry(id, updates) {
   const idx = history.findIndex((e) => e.id === id);
   if (idx !== -1) history[idx] = { ...history[idx], ...updates };
-}
-
-function formatDate(ts) {
-  return new Date(ts).toLocaleString("en-GB", {
-    timeZone: "Asia/Phnom_Penh",
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
 }
 
 function stripCountryCode(phone) {
@@ -93,7 +85,7 @@ async function setStatus(id, status) {
   return smsApiGet({ action: "setStatus", id, status });
 }
 
-function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
+function startAutoPolling(chatId, waitingMsgId, id, phone, svcLabel) {
   const INTERVAL  = 5000;
   const DOTS      = ["🔄", "⏳", "🔄", "⌛"];
   let   tickCount = 0;
@@ -105,8 +97,8 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
 
       if (status.startsWith("STATUS_OK")) {
         clearInterval(timer);
-        sessions.delete(userId);
-        const code        = status.slice("STATUS_OK:".length);
+        sessions.delete(id);
+        const code         = status.slice("STATUS_OK:".length);
         const displayPhone = stripCountryCode(phone);
         try { await setStatus(id, 6); } catch (_) {}
 
@@ -128,7 +120,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
 
       if (status === "STATUS_CANCEL") {
         clearInterval(timer);
-        sessions.delete(userId);
+        sessions.delete(id);
         updateHistoryEntry(id, { status: "❌ Cancelled", completedAt: Date.now() });
         await bot.telegram.sendMessage(
           chatId,
@@ -138,7 +130,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         return;
       }
 
-      const spin = DOTS[tickCount % DOTS.length];
+      const spin      = DOTS[tickCount % DOTS.length];
       const cancelBtn = Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", `cancel_${id}`)]]);
       await bot.telegram.editMessageText(
         chatId, waitingMsgId, null,
@@ -155,9 +147,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
 }
 
 async function handleGetNumber(ctx, serviceKey) {
-  const userId = ctx.from.id;
-  const chatId = ctx.chat.id;
-
+  const chatId   = ctx.chat.id;
   const svcLabel = SERVICES[serviceKey].label;
 
   try {
@@ -167,15 +157,15 @@ async function handleGetNumber(ctx, serviceKey) {
     addHistoryEntry({ id, phone, service: svcLabel, purchasedAt, status: "⏳ Waiting", code: null });
 
     const cancelBtn = Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", `cancel_${id}`)]]);
-    const waitMsg = await bot.telegram.sendMessage(
+    const waitMsg   = await bot.telegram.sendMessage(
       chatId,
       `⏳ *Waiting for SMS...*\n\n📱 Number: \`${stripCountryCode(phone)}\`\n🌐 Service: ${svcLabel}`,
       { parse_mode: "Markdown", ...mainMenu(), ...cancelBtn }
     );
 
-    sessions.set(userId, { id, phone, serviceKey, chatId, waitMsgId: waitMsg.message_id, startedAt: purchasedAt });
+    sessions.set(id, { id, phone, serviceKey, chatId, waitMsgId: waitMsg.message_id, startedAt: purchasedAt });
 
-    startAutoPolling(userId, chatId, waitMsg.message_id, id, phone, svcLabel);
+    startAutoPolling(chatId, waitMsg.message_id, id, phone, svcLabel);
 
   } catch (err) {
     console.error("handleGetNumber error:", err.message);
@@ -192,13 +182,6 @@ process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:
 
 bot.start(async (ctx) => {
   if (!isAdmin(ctx)) return ctx.reply("⛔ Access denied.").catch(() => {});
-  const userId = ctx.from.id;
-  if (sessions.has(userId)) {
-    const session = sessions.get(userId);
-    try { await setStatus(session.id, 8); } catch (_) {}
-    updateHistoryEntry(session.id, { status: "❌ Cancelled", completedAt: Date.now() });
-    sessions.delete(userId);
-  }
   await ctx.reply(
     `👋 *Welcome to SMS Number Bot!*\n\nChoose a service:`,
     { parse_mode: "Markdown", ...mainMenu() }
@@ -257,13 +240,12 @@ bot.hears(BTN.HISTORY, async (ctx) => {
 
 bot.action(/^cancel_(.+)$/, async (ctx) => {
   const id      = ctx.match[1];
-  const userId  = ctx.from.id;
-  const session = sessions.get(userId);
+  const session = sessions.get(id);
 
-  if (session && session.id === id) {
+  if (session) {
     try { await setStatus(id, 8); } catch (_) {}
     updateHistoryEntry(id, { status: "❌ Cancelled", completedAt: Date.now() });
-    sessions.delete(userId);
+    sessions.delete(id);
   }
 
   await ctx.answerCbQuery("Cancelled.").catch(() => {});
