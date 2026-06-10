@@ -15,14 +15,18 @@ const sessions = new Map();
 
 const SERVICES = {
   cambodia: { label: "🇰🇭 Cambodia", service: "2839", server: "1" },
+  thailand: { label: "🇹🇭 Thailand", service: "ot", server: "10" },
   other: { label: "🌍 Other (OT)", service: "ot", server: "10" },
 };
 
 function mainMenuKeyboard(hasActive) {
   const rows = [
     [
-      Markup.button.callback("🇰🇭 Cambodia Number", "get_cambodia"),
-      Markup.button.callback("🌍 Other Number", "get_other"),
+      Markup.button.callback("🇰🇭 Cambodia", "get_cambodia"),
+      Markup.button.callback("🇹🇭 Thailand", "get_thailand"),
+    ],
+    [
+      Markup.button.callback("🌍 Other (OT)", "get_other"),
     ],
   ];
   if (hasActive) {
@@ -164,6 +168,7 @@ bot.start(async (ctx) => {
 });
 
 bot.action("get_cambodia", (ctx) => handleGetNumber(ctx, "cambodia"));
+bot.action("get_thailand", (ctx) => handleGetNumber(ctx, "thailand"));
 bot.action("get_other", (ctx) => handleGetNumber(ctx, "other"));
 
 bot.action("check", async (ctx) => {
