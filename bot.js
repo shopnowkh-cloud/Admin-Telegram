@@ -184,7 +184,6 @@ async function handleGetNumber(ctx, serviceKey) {
   const chatId = ctx.chat.id;
 
   const svcLabel = SERVICES[serviceKey].label;
-  await ctx.reply(`⏳ Requesting a ${svcLabel} number...`, mainMenu()).catch(() => {});
 
   try {
     const { id, phone } = await getNumber(serviceKey);
