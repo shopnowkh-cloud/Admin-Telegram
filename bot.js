@@ -9,7 +9,7 @@ const ADMIN_ID = parseInt(process.env.ADMIN_ID, 10);
 if (!API_KEY)   { console.error("Missing SMS_API_KEY"); process.exit(1); }
 if (!ADMIN_ID)  { console.error("Missing ADMIN_ID");   process.exit(1); }
 
-const BASE_URL    = "https://sms-x.org/stubs/handler_api.php";
+const BASE_URL     = "https://sms-x.org/stubs/handler_api.php";
 const HISTORY_FILE = "./history.json";
 
 const bot      = new Telegraf(BOT_TOKEN);
@@ -21,7 +21,6 @@ const BTN = {
   VIETNAM:  "🇻🇳 Vietnam",
   BALANCE:  "💰 Balance",
   HISTORY:  "📋 History",
-  CANCEL:   "❌ Cancel Number",
 };
 
 const SERVICES = {
@@ -30,13 +29,11 @@ const SERVICES = {
   [BTN.VIETNAM]:  { label: BTN.VIETNAM,  service: "2839", server: "32" },
 };
 
-function mainMenu(hasActive) {
-  const rows = [
+function mainMenu() {
+  return Markup.keyboard([
     [BTN.CAMBODIA, BTN.THAILAND, BTN.VIETNAM],
     [BTN.BALANCE,  BTN.HISTORY],
-  ];
-  if (hasActive) rows.push([BTN.CANCEL]);
-  return Markup.keyboard(rows).resize();
+  ]).resize();
 }
 
 function isAdmin(ctx) {
@@ -120,7 +117,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
 
   const timer = setInterval(async () => {
     try {
-      const status  = await getStatus(id);
+      const status = await getStatus(id);
 
       if (status.startsWith("STATUS_OK")) {
         clearInterval(timer);
@@ -139,7 +136,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         await bot.telegram.sendMessage(
           chatId,
           `🎉 *SMS Code Received!*\n\n🔑 Code: \`${code}\`\n📱 Number: \`${phone}\``,
-          { parse_mode: "Markdown", ...mainMenu(false) }
+          { parse_mode: "Markdown", ...mainMenu() }
         ).catch((e) => console.error("sendMessage error:", e.message));
         return;
       }
@@ -151,7 +148,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         await bot.telegram.sendMessage(
           chatId,
           `❌ Number \`${phone}\` was cancelled.`,
-          { parse_mode: "Markdown", ...mainMenu(false) }
+          { parse_mode: "Markdown", ...mainMenu() }
         ).catch(() => {});
         return;
       }
@@ -163,7 +160,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         await bot.telegram.sendMessage(
           chatId,
           `⏰ *Timed out!* No SMS in 2 min for \`${phone}\`.`,
-          { parse_mode: "Markdown", ...mainMenu(false) }
+          { parse_mode: "Markdown", ...mainMenu() }
         ).catch(() => {});
         return;
       }
@@ -189,13 +186,13 @@ async function handleGetNumber(ctx, serviceKey) {
   if (sessions.has(userId)) {
     const { phone } = sessions.get(userId);
     return ctx.reply(
-      `⚠️ You already have an active number: \`${phone}\`\nTap ❌ Cancel Number first.`,
-      { parse_mode: "Markdown", ...mainMenu(true) }
+      `⚠️ You already have an active number: \`${phone}\``,
+      { parse_mode: "Markdown", ...mainMenu() }
     ).catch(() => {});
   }
 
   const svcLabel = SERVICES[serviceKey].label;
-  await ctx.reply(`⏳ Requesting a ${svcLabel} number...`, mainMenu(false)).catch(() => {});
+  await ctx.reply(`⏳ Requesting a ${svcLabel} number...`, mainMenu()).catch(() => {});
 
   try {
     const { id, phone } = await getNumber(serviceKey);
@@ -213,14 +210,14 @@ async function handleGetNumber(ctx, serviceKey) {
 
     await ctx.reply(
       `✅ *Number Ready!*\n📱 \`${phone}\`\n\nAuto-checking SMS every 5s...`,
-      { parse_mode: "Markdown", ...mainMenu(true) }
+      { parse_mode: "Markdown", ...mainMenu() }
     ).catch(() => {});
 
     startAutoPolling(userId, chatId, waitMsg.message_id, id, phone, svcLabel);
 
   } catch (err) {
     console.error("handleGetNumber error:", err.message);
-    await ctx.reply(`❌ Failed to get number: ${err.message}`, mainMenu(false)).catch(() => {});
+    await ctx.reply(`❌ Failed to get number: ${err.message}`, mainMenu()).catch(() => {});
   }
 }
 
@@ -242,7 +239,7 @@ bot.start(async (ctx) => {
   }
   await ctx.reply(
     `👋 *Welcome to SMS Number Bot!*\n\nChoose a service:`,
-    { parse_mode: "Markdown", ...mainMenu(false) }
+    { parse_mode: "Markdown", ...mainMenu() }
   ).catch(() => {});
 });
 
@@ -268,10 +265,10 @@ bot.hears(BTN.BALANCE, async (ctx) => {
     const amount = text.startsWith("ACCESS_BALANCE") ? text.split(":")[1] : text;
     await ctx.reply(
       `💰 *Account Balance*\n\n💵 \`$${amount}\``,
-      { parse_mode: "Markdown", ...mainMenu(sessions.has(ctx.from.id)) }
+      { parse_mode: "Markdown", ...mainMenu() }
     ).catch(() => {});
   } catch (err) {
-    await ctx.reply(`❌ Failed to get balance: ${err.message}`, mainMenu(sessions.has(ctx.from.id))).catch(() => {});
+    await ctx.reply(`❌ Failed to get balance: ${err.message}`, mainMenu()).catch(() => {});
   }
 });
 
@@ -281,13 +278,13 @@ bot.hears(BTN.HISTORY, async (ctx) => {
   const userId  = ctx.from.id;
 
   if (history.length === 0) {
-    return ctx.reply("📋 No purchased numbers yet.", mainMenu(sessions.has(userId))).catch(() => {});
+    return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
   }
 
   const filtered = history.filter((e) => e.status !== "❌ Cancelled");
 
   if (filtered.length === 0) {
-    return ctx.reply("📋 No purchased numbers yet.", mainMenu(sessions.has(userId))).catch(() => {});
+    return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
   }
 
   const lines = filtered.slice(0, 20).map((e, i) => {
@@ -298,30 +295,13 @@ bot.hears(BTN.HISTORY, async (ctx) => {
 
   await ctx.reply(
     `📋 Purchased Numbers (last ${lines.length})\n\n` + lines.join("\n\n"),
-    { ...mainMenu(sessions.has(userId)) }
-  ).catch(() => {});
-});
-
-bot.hears(BTN.CANCEL, async (ctx) => {
-  if (!isAdmin(ctx)) return;
-  const userId  = ctx.from.id;
-  const session = sessions.get(userId);
-
-  if (!session) return;
-
-  try { await setStatus(session.id, 8); } catch (_) {}
-  updateHistoryEntry(session.id, { status: "❌ Cancelled", completedAt: Date.now() });
-  sessions.delete(userId);
-
-  await ctx.reply(
-    `✅ Number \`${session.phone}\` has been cancelled.`,
-    { parse_mode: "Markdown", ...mainMenu(false) }
+    { ...mainMenu() }
   ).catch(() => {});
 });
 
 bot.on("text", async (ctx) => {
-  if (!isAdmin(ctx)) return ctx.reply("⛔ Access denied.", mainMenu(false)).catch(() => {});
-  await ctx.reply("Choose a service:", mainMenu(sessions.has(ctx.from.id))).catch(() => {});
+  if (!isAdmin(ctx)) return ctx.reply("⛔ Access denied.", mainMenu()).catch(() => {});
+  await ctx.reply("Choose a service:", mainMenu()).catch(() => {});
 });
 
 async function launch() {
