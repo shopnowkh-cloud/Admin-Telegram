@@ -275,9 +275,9 @@ bot.hears(BTN.HISTORY, async (ctx) => {
 
   const entries = filtered.slice(0, 20);
   const lines = entries.map((e, i) => {
-    const date = formatDate(e.purchasedAt);
-    const code = e.code ? `🔑 ${e.code}` : e.status;
-    return `${i + 1}. ${e.service} | 📱 ${e.phone}\n    ${code} | 🕐 ${date}`;
+    const flag = e.service.includes("Cambodia") ? "🇰🇭" : e.service.includes("Thailand") ? "🇹🇭" : "🇻🇳";
+    const status = e.code ? `🔑 ${e.code}` : e.status;
+    return `${i + 1}. ${flag} ${e.phone}\n    ${status}`;
   });
 
   await ctx.reply(
