@@ -18,19 +18,21 @@ const sessions = new Map();
 const BTN = {
   CAMBODIA: "🇰🇭 Cambodia",
   THAILAND: "🇹🇭 Thailand",
+  VIETNAM:  "🇻🇳 Vietnam",
   BALANCE:  "💰 Balance",
   HISTORY:  "📋 History",
   CANCEL:   "❌ Cancel Number",
 };
 
 const SERVICES = {
-  [BTN.CAMBODIA]: { label: BTN.CAMBODIA, service: "2839", server: "1" },
+  [BTN.CAMBODIA]: { label: BTN.CAMBODIA, service: "2839", server: "1"  },
   [BTN.THAILAND]: { label: BTN.THAILAND, service: "ot",   server: "10" },
+  [BTN.VIETNAM]:  { label: BTN.VIETNAM,  service: "eg",   server: "33" },
 };
 
 function mainMenu(hasActive) {
   const rows = [
-    [BTN.CAMBODIA, BTN.THAILAND],
+    [BTN.CAMBODIA, BTN.THAILAND, BTN.VIETNAM],
     [BTN.BALANCE,  BTN.HISTORY],
   ];
   if (hasActive) rows.push([BTN.CANCEL]);
@@ -253,6 +255,11 @@ bot.hears(BTN.CAMBODIA, async (ctx) => {
 bot.hears(BTN.THAILAND, async (ctx) => {
   if (!isAdmin(ctx)) return;
   await handleGetNumber(ctx, BTN.THAILAND);
+});
+
+bot.hears(BTN.VIETNAM, async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  await handleGetNumber(ctx, BTN.VIETNAM);
 });
 
 bot.hears(BTN.BALANCE, async (ctx) => {
