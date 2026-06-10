@@ -267,9 +267,7 @@ bot.hears(BTN.CANCEL, async (ctx) => {
   const userId  = ctx.from.id;
   const session = sessions.get(userId);
 
-  if (!session) {
-    return ctx.reply(`ℹ️ You have no active number to cancel.`, mainMenu(false)).catch(() => {});
-  }
+  if (!session) return;
 
   try { await setStatus(session.id, 8); } catch (_) {}
   updateHistoryEntry(session.id, { status: "❌ Cancelled", completedAt: Date.now() });
