@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-20"]
 
 [deployment]
 router = "application"
@@ -32,7 +32,7 @@ task = "shell.exec"
 args = "while true; do node bot.js; echo '🔄 Restarting bot in 3s...'; sleep 3; done"
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
@@ -46,3 +46,6 @@ externalPort = 80
 [[ports]]
 localPort = 8081
 externalPort = 8081
+
+[nix]
+channel = "stable-25_05"
