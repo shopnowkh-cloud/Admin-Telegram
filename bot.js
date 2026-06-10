@@ -6,11 +6,29 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
-const API_KEY = "3dd71200967c1afb2a82bf21ee9c138c";
+const API_KEY = process.env.SMS_API_KEY;
+const ADMIN_ID = parseInt(process.env.ADMIN_ID, 10);
+if (!API_KEY) { console.error("Missing SMS_API_KEY"); process.exit(1); }
+if (!ADMIN_ID) { console.error("Missing ADMIN_ID"); process.exit(1); }
+
 const BASE_URL = "https://sms-x.org/stubs/handler_api.php";
 
 const bot = new Telegraf(BOT_TOKEN);
 const sessions = new Map();
+
+function isAdmin(ctx) {
+  return ctx.from && ctx.from.id === ADMIN_ID;
+}
+
+function adminOnly(handler) {
+  return async (ctx) => {
+    if (!isAdmin(ctx)) {
+      await ctx.answerCbQuery("⛔ Access denied").catch(() => {});
+      return;
+    }
+    return handler(ctx);
+  };
+}
 
 const SERVICES = {
   cambodia: { label: "🇰🇭 Cambodia", service: "2839", server: "1" },
@@ -186,6 +204,9 @@ process.on("unhandledRejection", (reason) => {
 });
 
 bot.start(async (ctx) => {
+  if (!isAdmin(ctx)) {
+    return ctx.reply("⛔ Access denied.").catch(() => {});
+  }
   const userId = ctx.from.id;
   await ctx.reply(
     `👋 *Welcome to SMS Number Bot!*\n\nChoose a service to get a phone number:`,
@@ -193,10 +214,10 @@ bot.start(async (ctx) => {
   ).catch(() => {});
 });
 
-bot.action("get_cambodia", (ctx) => handleGetNumber(ctx, "cambodia"));
-bot.action("get_thailand", (ctx) => handleGetNumber(ctx, "thailand"));
+bot.action("get_cambodia", adminOnly((ctx) => handleGetNumber(ctx, "cambodia")));
+bot.action("get_thailand", adminOnly((ctx) => handleGetNumber(ctx, "thailand")));
 
-bot.action("balance", async (ctx) => {
+bot.action("balance", adminOnly(async (ctx) => {
   const userId = ctx.from.id;
   await ctx.answerCbQuery().catch(() => {});
   try {
@@ -211,9 +232,9 @@ bot.action("balance", async (ctx) => {
       ...mainMenuKeyboard(sessions.has(userId)),
     }).catch(() => {});
   }
-});
+}));
 
-bot.action("cancel", async (ctx) => {
+bot.action("cancel", adminOnly(async (ctx) => {
   const userId = ctx.from.id;
   await ctx.answerCbQuery().catch(() => {});
   const session = sessions.get(userId);
@@ -232,7 +253,7 @@ bot.action("cancel", async (ctx) => {
     `✅ Number \`${session.phone}\` has been cancelled.\n\nChoose a service to get a new number:`,
     { parse_mode: "Markdown", ...mainMenuKeyboard(false) }
   ).catch(() => {});
-});
+}));
 
 async function launch() {
   try {
