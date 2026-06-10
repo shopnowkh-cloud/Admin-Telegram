@@ -232,9 +232,16 @@ process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:
 
 bot.start(async (ctx) => {
   if (!isAdmin(ctx)) return ctx.reply("⛔ Access denied.").catch(() => {});
+  const userId = ctx.from.id;
+  if (sessions.has(userId)) {
+    const session = sessions.get(userId);
+    try { await setStatus(session.id, 8); } catch (_) {}
+    updateHistoryEntry(session.id, { status: "❌ Cancelled", completedAt: Date.now() });
+    sessions.delete(userId);
+  }
   await ctx.reply(
     `👋 *Welcome to SMS Number Bot!*\n\nChoose a service:`,
-    { parse_mode: "Markdown", ...mainMenu(sessions.has(ctx.from.id)) }
+    { parse_mode: "Markdown", ...mainMenu(false) }
   ).catch(() => {});
 });
 
