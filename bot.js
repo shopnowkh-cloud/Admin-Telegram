@@ -237,25 +237,20 @@ bot.hears(BTN.BALANCE, async (ctx) => {
 bot.hears(BTN.HISTORY, async (ctx) => {
   if (!isAdmin(ctx)) return;
 
-  if (history.length === 0) {
-    return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
+  const active = [...sessions.values()];
+
+  if (active.length === 0) {
+    return ctx.reply("📋 No active numbers.", mainMenu()).catch(() => {});
   }
 
-  const filtered = history.filter((e) => e.status === "⏳ Waiting");
-
-  if (filtered.length === 0) {
-    return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
-  }
-
-  const entries = filtered.slice(0, 20);
-  const lines = entries.map((e, i) => {
-    const flag = e.service.includes("Cambodia") ? "🇰🇭" : e.service.includes("Thailand") ? "🇹🇭" : "🇻🇳";
-    const status = e.code ? `🔑 ${e.code}` : e.status;
-    return `${i + 1}. ${flag} \`${e.phone}\`\n    ${status}`;
+  const lines = active.map((s, i) => {
+    const svcLabel = SERVICES[s.serviceKey]?.label || s.serviceKey;
+    const flag = svcLabel.includes("Cambodia") ? "🇰🇭" : svcLabel.includes("Thailand") ? "🇹🇭" : "🇻🇳";
+    return `${i + 1}. ${flag} \`${stripCountryCode(s.phone)}\`\n    ⏳ Waiting`;
   });
 
   await ctx.reply(
-    `📋 *Purchased Numbers* (${entries.length})\n\n` + lines.join("\n\n"),
+    `📋 *Active Numbers* (${active.length})\n\n` + lines.join("\n\n"),
     { parse_mode: "Markdown", ...mainMenu() }
   ).catch(() => {});
 });
