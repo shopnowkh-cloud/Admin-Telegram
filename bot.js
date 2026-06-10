@@ -278,7 +278,13 @@ bot.hears(BTN.HISTORY, async (ctx) => {
     return ctx.reply("📋 No purchased numbers yet.", mainMenu(sessions.has(userId))).catch(() => {});
   }
 
-  const lines = history.slice(0, 20).map((e, i) => {
+  const filtered = history.filter((e) => e.status !== "❌ Cancelled");
+
+  if (filtered.length === 0) {
+    return ctx.reply("📋 No purchased numbers yet.", mainMenu(sessions.has(userId))).catch(() => {});
+  }
+
+  const lines = filtered.slice(0, 20).map((e, i) => {
     const date = formatDate(e.purchasedAt);
     const code = e.code ? `🔑 ${e.code}` : e.status;
     return `${i + 1}. ${e.service} | 📱 ${e.phone}\n    ${code} | 🕐 ${date}`;
