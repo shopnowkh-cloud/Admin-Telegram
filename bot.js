@@ -275,7 +275,6 @@ bot.hears(BTN.BALANCE, async (ctx) => {
 bot.hears(BTN.HISTORY, async (ctx) => {
   if (!isAdmin(ctx)) return;
   const history = loadHistory();
-  const userId  = ctx.from.id;
 
   if (history.length === 0) {
     return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
@@ -287,16 +286,31 @@ bot.hears(BTN.HISTORY, async (ctx) => {
     return ctx.reply("📋 No purchased numbers yet.", mainMenu()).catch(() => {});
   }
 
-  const lines = filtered.slice(0, 20).map((e, i) => {
-    const date = formatDate(e.purchasedAt);
-    const code = e.code ? `🔑 ${e.code}` : e.status;
-    return `${i + 1}. ${e.service} | 📱 ${e.phone}\n    ${code} | 🕐 ${date}`;
+  const entries = filtered.slice(0, 20);
+  const buttons = entries.map((e) => {
+    const flag = e.service.includes("Cambodia") ? "🇰🇭" : e.service.includes("Thailand") ? "🇹🇭" : "🇻🇳";
+    const statusIcon = e.code ? `🔑 ${e.code}` : e.status.split(" ")[0];
+    return [Markup.button.callback(`${flag} ${e.phone}  ${statusIcon}`, `hist_${e.id}`)];
   });
 
   await ctx.reply(
-    `📋 Purchased Numbers (last ${lines.length})\n\n` + lines.join("\n\n"),
-    { ...mainMenu() }
+    `📋 *Purchased Numbers* (${entries.length})`,
+    { parse_mode: "Markdown", ...Markup.inlineKeyboard(buttons) }
   ).catch(() => {});
+});
+
+bot.action(/^hist_(.+)$/, async (ctx) => {
+  const id      = ctx.match[1];
+  const history = loadHistory();
+  const e       = history.find((h) => h.id === id);
+  if (!e) return ctx.answerCbQuery("Not found.").catch(() => {});
+
+  const date = formatDate(e.purchasedAt);
+  const code = e.code ? `🔑 *Code:* \`${e.code}\`` : `📊 *Status:* ${e.status}`;
+  const text = `📱 *Number:* \`${e.phone}\`\n🌐 *Service:* ${e.service}\n${code}\n🕐 *Purchased:* ${date}`;
+
+  await ctx.answerCbQuery().catch(() => {});
+  await ctx.reply(text, { parse_mode: "Markdown", ...mainMenu() }).catch(() => {});
 });
 
 bot.on("text", async (ctx) => {
@@ -307,7 +321,7 @@ bot.on("text", async (ctx) => {
 async function launch() {
   try {
     await bot.launch({
-      allowedUpdates: ["message"],
+      allowedUpdates: ["message", "callback_query"],
       dropPendingUpdates: true,
     });
     console.log("🤖 Telegram bot running (live 100%)...");
