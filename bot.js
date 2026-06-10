@@ -208,11 +208,6 @@ async function handleGetNumber(ctx, serviceKey) {
 
     sessions.set(userId, { id, phone, serviceKey, chatId, waitMsgId: waitMsg.message_id, startedAt: purchasedAt });
 
-    await ctx.reply(
-      `✅ *Number Ready!*\n📱 \`${phone}\`\n\nAuto-checking SMS every 5s...`,
-      { parse_mode: "Markdown", ...mainMenu() }
-    ).catch(() => {});
-
     startAutoPolling(userId, chatId, waitMsg.message_id, id, phone, svcLabel);
 
   } catch (err) {
