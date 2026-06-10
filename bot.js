@@ -183,14 +183,6 @@ async function handleGetNumber(ctx, serviceKey) {
   const userId = ctx.from.id;
   const chatId = ctx.chat.id;
 
-  if (sessions.has(userId)) {
-    const { phone } = sessions.get(userId);
-    return ctx.reply(
-      `⚠️ You already have an active number: \`${phone}\``,
-      { parse_mode: "Markdown", ...mainMenu() }
-    ).catch(() => {});
-  }
-
   const svcLabel = SERVICES[serviceKey].label;
   await ctx.reply(`⏳ Requesting a ${svcLabel} number...`, mainMenu()).catch(() => {});
 
