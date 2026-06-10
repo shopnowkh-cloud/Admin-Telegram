@@ -119,8 +119,6 @@ async function setStatus(id, status) {
 
 function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
   const INTERVAL  = 5000;
-  const TIMEOUT   = 120000;
-  const start     = Date.now();
   const DOTS      = ["🔄", "⏳", "🔄", "⌛"];
   let   tickCount = 0;
 
@@ -159,18 +157,6 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         await bot.telegram.sendMessage(
           chatId,
           `❌ Number \`${stripCountryCode(phone)}\` was cancelled.`,
-          { parse_mode: "Markdown", ...mainMenu() }
-        ).catch(() => {});
-        return;
-      }
-
-      if (Date.now() - start >= TIMEOUT) {
-        clearInterval(timer);
-        sessions.delete(userId);
-        updateHistoryEntry(id, { status: "⏰ Timeout", completedAt: Date.now() });
-        await bot.telegram.sendMessage(
-          chatId,
-          `⏰ *Timed out!* No SMS in 2 min for \`${stripCountryCode(phone)}\`.`,
           { parse_mode: "Markdown", ...mainMenu() }
         ).catch(() => {});
         return;
