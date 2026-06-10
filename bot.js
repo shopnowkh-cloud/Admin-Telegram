@@ -274,30 +274,16 @@ bot.hears(BTN.HISTORY, async (ctx) => {
   }
 
   const entries = filtered.slice(0, 20);
-  const buttons = entries.map((e) => {
-    const flag = e.service.includes("Cambodia") ? "🇰🇭" : e.service.includes("Thailand") ? "🇹🇭" : "🇻🇳";
-    const statusIcon = e.code ? `🔑 ${e.code}` : e.status.split(" ")[0];
-    return [Markup.button.callback(`${flag} ${e.phone}  ${statusIcon}`, `hist_${e.id}`)];
+  const lines = entries.map((e, i) => {
+    const date = formatDate(e.purchasedAt);
+    const code = e.code ? `🔑 ${e.code}` : e.status;
+    return `${i + 1}. ${e.service} | 📱 ${e.phone}\n    ${code} | 🕐 ${date}`;
   });
 
   await ctx.reply(
-    `📋 *Purchased Numbers* (${entries.length})`,
-    { parse_mode: "Markdown", ...Markup.inlineKeyboard(buttons) }
+    `📋 *Purchased Numbers* (${entries.length})\n\n` + lines.join("\n\n"),
+    { parse_mode: "Markdown", ...mainMenu() }
   ).catch(() => {});
-});
-
-bot.action(/^hist_(.+)$/, async (ctx) => {
-  const id      = ctx.match[1];
-  const history = loadHistory();
-  const e       = history.find((h) => h.id === id);
-  if (!e) return ctx.answerCbQuery("Not found.").catch(() => {});
-
-  const date = formatDate(e.purchasedAt);
-  const code = e.code ? `🔑 *Code:* \`${e.code}\`` : `📊 *Status:* ${e.status}`;
-  const text = `📱 *Number:* \`${e.phone}\`\n🌐 *Service:* ${e.service}\n${code}\n🕐 *Purchased:* ${date}`;
-
-  await ctx.answerCbQuery().catch(() => {});
-  await ctx.reply(text, { parse_mode: "Markdown", ...mainMenu() }).catch(() => {});
 });
 
 bot.on("text", async (ctx) => {
