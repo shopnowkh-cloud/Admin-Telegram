@@ -258,9 +258,28 @@ bot.action("cancel", async (ctx) => {
   ).catch(() => {});
 });
 
-bot.launch(() => {
-  console.log("🤖 Telegram bot is running...");
-});
+async function launch() {
+  try {
+    await bot.launch({
+      allowedUpdates: ["message", "callback_query"],
+      dropPendingUpdates: true,
+    });
+    console.log("🤖 Telegram bot is running (live 100%)...");
+  } catch (err) {
+    console.error("Launch error:", err.message, "— retrying in 5s...");
+    setTimeout(launch, 5000);
+  }
+}
+
+setInterval(async () => {
+  try {
+    await bot.telegram.getMe();
+  } catch (err) {
+    console.error("Heartbeat failed:", err.message);
+  }
+}, 30000);
+
+launch();
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
