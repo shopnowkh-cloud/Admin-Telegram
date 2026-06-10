@@ -194,7 +194,7 @@ async function handleGetNumber(ctx, serviceKey) {
     const waitMsg = await bot.telegram.sendMessage(
       chatId,
       `⏳ *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}`,
-      { parse_mode: "Markdown" }
+      { parse_mode: "Markdown", ...mainMenu() }
     );
 
     sessions.set(userId, { id, phone, serviceKey, chatId, waitMsgId: waitMsg.message_id, startedAt: purchasedAt });
