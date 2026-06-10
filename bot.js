@@ -23,6 +23,9 @@ function mainMenuKeyboard(hasActive) {
       Markup.button.callback("🇰🇭 Cambodia", "get_cambodia"),
       Markup.button.callback("🇹🇭 Thailand", "get_thailand"),
     ],
+    [
+      Markup.button.callback("💰 Balance", "balance"),
+    ],
   ];
   if (hasActive) {
     rows.push([
@@ -192,6 +195,23 @@ bot.start(async (ctx) => {
 
 bot.action("get_cambodia", (ctx) => handleGetNumber(ctx, "cambodia"));
 bot.action("get_thailand", (ctx) => handleGetNumber(ctx, "thailand"));
+
+bot.action("balance", async (ctx) => {
+  const userId = ctx.from.id;
+  await ctx.answerCbQuery().catch(() => {});
+  try {
+    const text = await smsApiGet({ action: "getBalance" });
+    const amount = text.startsWith("ACCESS_BALANCE") ? text.split(":")[1] : text;
+    await ctx.reply(
+      `💰 *Account Balance*\n\n💵 \`$${amount}\``,
+      { parse_mode: "Markdown", ...mainMenuKeyboard(sessions.has(userId)) }
+    ).catch(() => {});
+  } catch (err) {
+    await ctx.reply(`❌ Failed to get balance: ${err.message}`, {
+      ...mainMenuKeyboard(sessions.has(userId)),
+    }).catch(() => {});
+  }
+});
 
 bot.action("cancel", async (ctx) => {
   const userId = ctx.from.id;
