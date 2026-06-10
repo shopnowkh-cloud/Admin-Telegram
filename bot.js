@@ -276,7 +276,7 @@ bot.hears(BTN.HISTORY, async (ctx) => {
   const lines = entries.map((e, i) => {
     const flag = e.service.includes("Cambodia") ? "🇰🇭" : e.service.includes("Thailand") ? "🇹🇭" : "🇻🇳";
     const status = e.code ? `🔑 ${e.code}` : e.status;
-    return `${i + 1}. ${flag} ${e.phone}\n    ${status}`;
+    return `${i + 1}. ${flag} \`${e.phone}\`\n    ${status}`;
   });
 
   await ctx.reply(
