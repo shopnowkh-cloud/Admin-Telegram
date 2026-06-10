@@ -111,13 +111,16 @@ async function setStatus(id, status) {
 }
 
 function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
-  const INTERVAL = 5000;
-  const TIMEOUT  = 120000;
-  const start    = Date.now();
+  const INTERVAL  = 5000;
+  const TIMEOUT   = 120000;
+  const start     = Date.now();
+  const DOTS      = ["🔄", "⏳", "🔄", "⌛"];
+  let   tickCount = 0;
 
   const timer = setInterval(async () => {
     try {
       const status = await getStatus(id);
+      tickCount++;
 
       if (status.startsWith("STATUS_OK")) {
         clearInterval(timer);
@@ -165,9 +168,10 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         return;
       }
 
+      const spin = DOTS[tickCount % DOTS.length];
       await bot.telegram.editMessageText(
         chatId, waitingMsgId, null,
-        `⏳ *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}`,
+        `${spin} *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}`,
         { parse_mode: "Markdown" }
       ).catch(() => {});
 
