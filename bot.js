@@ -1,22 +1,25 @@
 const { Telegraf, Markup } = require("telegraf");
+const fs = require("fs");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!BOT_TOKEN) { console.error("Missing TELEGRAM_BOT_TOKEN"); process.exit(1); }
 
-const API_KEY = process.env.SMS_API_KEY;
+const API_KEY  = process.env.SMS_API_KEY;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID, 10);
-if (!API_KEY) { console.error("Missing SMS_API_KEY"); process.exit(1); }
-if (!ADMIN_ID) { console.error("Missing ADMIN_ID"); process.exit(1); }
+if (!API_KEY)   { console.error("Missing SMS_API_KEY"); process.exit(1); }
+if (!ADMIN_ID)  { console.error("Missing ADMIN_ID");   process.exit(1); }
 
-const BASE_URL = "https://sms-x.org/stubs/handler_api.php";
+const BASE_URL    = "https://sms-x.org/stubs/handler_api.php";
+const HISTORY_FILE = "./history.json";
 
-const bot = new Telegraf(BOT_TOKEN);
+const bot      = new Telegraf(BOT_TOKEN);
 const sessions = new Map();
 
 const BTN = {
   CAMBODIA: "🇰🇭 Cambodia",
   THAILAND: "🇹🇭 Thailand",
   BALANCE:  "💰 Balance",
+  HISTORY:  "📋 History",
   CANCEL:   "❌ Cancel Number",
 };
 
@@ -28,7 +31,7 @@ const SERVICES = {
 function mainMenu(hasActive) {
   const rows = [
     [BTN.CAMBODIA, BTN.THAILAND],
-    [BTN.BALANCE],
+    [BTN.BALANCE,  BTN.HISTORY],
   ];
   if (hasActive) rows.push([BTN.CANCEL]);
   return Markup.keyboard(rows).resize();
@@ -36,6 +39,47 @@ function mainMenu(hasActive) {
 
 function isAdmin(ctx) {
   return ctx.from && ctx.from.id === ADMIN_ID;
+}
+
+function loadHistory() {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+    }
+  } catch (_) {}
+  return [];
+}
+
+function saveHistory(history) {
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+  } catch (err) {
+    console.error("Failed to save history:", err.message);
+  }
+}
+
+function addHistoryEntry(entry) {
+  const history = loadHistory();
+  history.unshift(entry);
+  if (history.length > 100) history.splice(100);
+  saveHistory(history);
+}
+
+function updateHistoryEntry(id, updates) {
+  const history = loadHistory();
+  const idx = history.findIndex((e) => e.id === id);
+  if (idx !== -1) {
+    history[idx] = { ...history[idx], ...updates };
+    saveHistory(history);
+  }
+}
+
+function formatDate(ts) {
+  return new Date(ts).toLocaleString("en-GB", {
+    timeZone: "Asia/Phnom_Penh",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
 }
 
 async function smsApiGet(params) {
@@ -83,6 +127,8 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         const code = status.split(":")[1];
         try { await setStatus(id, 6); } catch (_) {}
 
+        updateHistoryEntry(id, { code, status: "✅ Received", completedAt: Date.now() });
+
         await bot.telegram.editMessageText(
           chatId, waitingMsgId, null,
           `✅ Number: \`${phone}\` | ${svcLabel}`,
@@ -100,6 +146,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
       if (status === "STATUS_CANCEL") {
         clearInterval(timer);
         sessions.delete(userId);
+        updateHistoryEntry(id, { status: "❌ Cancelled", completedAt: Date.now() });
         await bot.telegram.sendMessage(
           chatId,
           `❌ Number \`${phone}\` was cancelled.`,
@@ -111,6 +158,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
       if (Date.now() - start >= TIMEOUT) {
         clearInterval(timer);
         sessions.delete(userId);
+        updateHistoryEntry(id, { status: "⏰ Timeout", completedAt: Date.now() });
         await bot.telegram.sendMessage(
           chatId,
           `⏰ *Timed out!* No SMS in 2 min for \`${phone}\`.`,
@@ -150,6 +198,9 @@ async function handleGetNumber(ctx, serviceKey) {
 
   try {
     const { id, phone } = await getNumber(serviceKey);
+    const purchasedAt   = Date.now();
+
+    addHistoryEntry({ id, phone, service: svcLabel, purchasedAt, status: "⏳ Waiting", code: null });
 
     const waitMsg = await bot.telegram.sendMessage(
       chatId,
@@ -157,11 +208,7 @@ async function handleGetNumber(ctx, serviceKey) {
       { parse_mode: "Markdown" }
     );
 
-    sessions.set(userId, {
-      id, phone, serviceKey, chatId,
-      waitMsgId: waitMsg.message_id,
-      startedAt: Date.now(),
-    });
+    sessions.set(userId, { id, phone, serviceKey, chatId, waitMsgId: waitMsg.message_id, startedAt: purchasedAt });
 
     await ctx.reply(
       `✅ *Number Ready!*\n📱 \`${phone}\`\n\nAuto-checking SMS every 5s...`,
@@ -215,6 +262,28 @@ bot.hears(BTN.BALANCE, async (ctx) => {
   }
 });
 
+bot.hears(BTN.HISTORY, async (ctx) => {
+  if (!isAdmin(ctx)) return;
+  const history = loadHistory();
+
+  if (history.length === 0) {
+    return ctx.reply("📋 No purchased numbers yet.", mainMenu(sessions.has(ctx.from.id))).catch(() => {});
+  }
+
+  const lines = history.slice(0, 20).map((e, i) => {
+    const date = formatDate(e.purchasedAt);
+    const code = e.code ? `🔑 \`${e.code}\`` : e.status;
+    return `${i + 1}\\. ${e.service} \\| 📱 \`${e.phone}\`\n    ${code} \\| 🕐 ${date}`;
+  });
+
+  const msg = `📋 *Purchased Numbers \\(last ${history.slice(0, 20).length}\\)*\n\n` + lines.join("\n\n");
+
+  await ctx.reply(msg, {
+    parse_mode: "MarkdownV2",
+    ...mainMenu(sessions.has(ctx.from.id)),
+  }).catch(() => {});
+});
+
 bot.hears(BTN.CANCEL, async (ctx) => {
   if (!isAdmin(ctx)) return;
   const userId  = ctx.from.id;
@@ -225,6 +294,7 @@ bot.hears(BTN.CANCEL, async (ctx) => {
   }
 
   try { await setStatus(session.id, 8); } catch (_) {}
+  updateHistoryEntry(session.id, { status: "❌ Cancelled", completedAt: Date.now() });
   sessions.delete(userId);
 
   await ctx.reply(
@@ -235,11 +305,7 @@ bot.hears(BTN.CANCEL, async (ctx) => {
 
 bot.on("text", async (ctx) => {
   if (!isAdmin(ctx)) return ctx.reply("⛔ Access denied.", mainMenu(false)).catch(() => {});
-  const userId = ctx.from.id;
-  await ctx.reply(
-    `Choose a service:`,
-    { ...mainMenu(sessions.has(userId)) }
-  ).catch(() => {});
+  await ctx.reply("Choose a service:", mainMenu(sessions.has(ctx.from.id))).catch(() => {});
 });
 
 async function launch() {
@@ -248,7 +314,7 @@ async function launch() {
       allowedUpdates: ["message"],
       dropPendingUpdates: true,
     });
-    console.log("🤖 Telegram bot is running with reply keyboard (live 100%)...");
+    console.log("🤖 Telegram bot running (live 100%)...");
   } catch (err) {
     console.error("Launch error:", err.message, "— retrying in 5s...");
     setTimeout(launch, 5000);
