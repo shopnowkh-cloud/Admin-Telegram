@@ -26,7 +26,6 @@ function mainMenuKeyboard(hasActive) {
   ];
   if (hasActive) {
     rows.push([
-      Markup.button.callback("🔄 Check Status", "check"),
       Markup.button.callback("❌ Cancel Number", "cancel"),
     ]);
   }
@@ -193,49 +192,6 @@ bot.start(async (ctx) => {
 
 bot.action("get_cambodia", (ctx) => handleGetNumber(ctx, "cambodia"));
 bot.action("get_thailand", (ctx) => handleGetNumber(ctx, "thailand"));
-
-bot.action("check", async (ctx) => {
-  const userId = ctx.from.id;
-  await ctx.answerCbQuery().catch(() => {});
-  const session = sessions.get(userId);
-
-  if (!session) {
-    return ctx.editMessageText(
-      `ℹ️ You have no active number.\nChoose a service below to get one:`,
-      { ...mainMenuKeyboard(false) }
-    ).catch(() => {});
-  }
-
-  try {
-    const status = await getStatus(session.id);
-    const elapsed = Math.floor((Date.now() - session.startedAt) / 1000);
-
-    if (status.startsWith("STATUS_OK")) {
-      const code = status.split(":")[1];
-      sessions.delete(userId);
-      try { await setStatus(session.id, 6); } catch (_) {}
-
-      await ctx.editMessageText(
-        `✅ Number: \`${session.phone}\``,
-        { parse_mode: "Markdown" }
-      ).catch(() => {});
-
-      return ctx.reply(
-        `🎉 *SMS Code Received!*\n\n🔑 Code: \`${code}\`\n📱 Number: \`${session.phone}\``,
-        { parse_mode: "Markdown", ...mainMenuKeyboard(false) }
-      ).catch(() => {});
-    }
-
-    await ctx.editMessageText(
-      `⏳ *Waiting for SMS...*\n\n📱 Number: \`${session.phone}\`\n🌐 Service: ${SERVICES[session.serviceKey].label}\n🕐 Elapsed: ${elapsed}s`,
-      { parse_mode: "Markdown", ...mainMenuKeyboard(true) }
-    ).catch(() => {});
-
-  } catch (err) {
-    console.error("check error:", err.message);
-    await ctx.reply(`❌ Error: ${err.message}`, { ...mainMenuKeyboard(true) }).catch(() => {});
-  }
-});
 
 bot.action("cancel", async (ctx) => {
   const userId = ctx.from.id;
