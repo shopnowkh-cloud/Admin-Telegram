@@ -177,10 +177,11 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
       }
 
       const spin = DOTS[tickCount % DOTS.length];
+      const cancelBtn = Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", `cancel_${id}`)]]);
       await bot.telegram.editMessageText(
         chatId, waitingMsgId, null,
         `${spin} *Waiting for SMS...*\n\n📱 Number: \`${stripCountryCode(phone)}\`\n🌐 Service: ${svcLabel}`,
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown", ...cancelBtn }
       ).catch(() => {});
 
     } catch (err) {
@@ -203,10 +204,11 @@ async function handleGetNumber(ctx, serviceKey) {
 
     addHistoryEntry({ id, phone, service: svcLabel, purchasedAt, status: "⏳ Waiting", code: null });
 
+    const cancelBtn = Markup.inlineKeyboard([[Markup.button.callback("❌ Cancel", `cancel_${id}`)]]);
     const waitMsg = await bot.telegram.sendMessage(
       chatId,
       `⏳ *Waiting for SMS...*\n\n📱 Number: \`${stripCountryCode(phone)}\`\n🌐 Service: ${svcLabel}`,
-      { parse_mode: "Markdown", ...mainMenu() }
+      { parse_mode: "Markdown", ...mainMenu(), ...cancelBtn }
     );
 
     sessions.set(userId, { id, phone, serviceKey, chatId, waitMsgId: waitMsg.message_id, startedAt: purchasedAt });
@@ -294,6 +296,24 @@ bot.hears(BTN.HISTORY, async (ctx) => {
   await ctx.reply(
     `📋 *Purchased Numbers* (${entries.length})\n\n` + lines.join("\n\n"),
     { parse_mode: "Markdown", ...mainMenu() }
+  ).catch(() => {});
+});
+
+bot.action(/^cancel_(.+)$/, async (ctx) => {
+  const id      = ctx.match[1];
+  const userId  = ctx.from.id;
+  const session = sessions.get(userId);
+
+  if (session && session.id === id) {
+    try { await setStatus(id, 8); } catch (_) {}
+    updateHistoryEntry(id, { status: "❌ Cancelled", completedAt: Date.now() });
+    sessions.delete(userId);
+  }
+
+  await ctx.answerCbQuery("Cancelled.").catch(() => {});
+  await ctx.editMessageText(
+    `❌ *Cancelled*\n\n📱 Number: \`${stripCountryCode(session?.phone || "")}\``,
+    { parse_mode: "Markdown" }
   ).catch(() => {});
 });
 
