@@ -1,4 +1,4 @@
-const { Telegraf } = require("telegraf");
+const { Telegraf, Markup } = require("telegraf");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!BOT_TOKEN) {
@@ -13,10 +13,41 @@ const bot = new Telegraf(BOT_TOKEN);
 
 const sessions = new Map();
 
-async function getNumber() {
-  const url = `${BASE_URL}?api_key=${API_KEY}&action=getNumber&service=ot&server=10`;
+const SERVICES = {
+  cambodia: { label: "🇰🇭 Cambodia", service: "2839", server: "1" },
+  other: { label: "🌍 Other (OT)", service: "ot", server: "10" },
+};
+
+function mainMenuKeyboard(hasActive) {
+  const rows = [
+    [
+      Markup.button.callback("🇰🇭 Cambodia Number", "get_cambodia"),
+      Markup.button.callback("🌍 Other Number", "get_other"),
+    ],
+  ];
+  if (hasActive) {
+    rows.push([
+      Markup.button.callback("🔄 Check Status", "check"),
+      Markup.button.callback("❌ Cancel Number", "cancel"),
+    ]);
+  }
+  return Markup.inlineKeyboard(rows);
+}
+
+async function smsApiGet(params) {
+  const url =
+    BASE_URL +
+    "?" +
+    Object.entries({ api_key: API_KEY, ...params })
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&");
   const res = await fetch(url);
-  const text = (await res.text()).trim();
+  return (await res.text()).trim();
+}
+
+async function getNumber(serviceKey) {
+  const { service, server } = SERVICES[serviceKey];
+  const text = await smsApiGet({ action: "getNumber", service, server });
   if (text.startsWith("ACCESS_NUMBER")) {
     const parts = text.split(":");
     return { id: parts[1], phone: parts[2] };
@@ -25,109 +56,126 @@ async function getNumber() {
 }
 
 async function getStatus(id) {
-  const url = `${BASE_URL}?api_key=${API_KEY}&action=getStatus&id=${id}`;
-  const res = await fetch(url);
-  return (await res.text()).trim();
+  return smsApiGet({ action: "getStatus", id });
 }
 
 async function setStatus(id, status) {
-  const url = `${BASE_URL}?api_key=${API_KEY}&action=setStatus&id=${id}&status=${status}`;
-  const res = await fetch(url);
-  return (await res.text()).trim();
+  return smsApiGet({ action: "setStatus", id, status });
 }
 
-async function pollForSms(ctx, id, intervalMs = 5000, timeoutMs = 120000) {
+async function startPolling(ctx, userId, id, phone, editMsgId) {
+  const intervalMs = 5000;
+  const timeoutMs = 120000;
   const start = Date.now();
-  return new Promise((resolve, reject) => {
-    const timer = setInterval(async () => {
-      try {
-        const status = await getStatus(id);
-        if (status.startsWith("STATUS_OK")) {
-          clearInterval(timer);
-          const code = status.split(":")[1];
-          resolve(code);
-        } else if (status === "STATUS_CANCEL") {
-          clearInterval(timer);
-          reject(new Error("Number was cancelled"));
-        } else if (Date.now() - start >= timeoutMs) {
-          clearInterval(timer);
-          reject(new Error("Timed out waiting for SMS (2 min)"));
-        }
-      } catch (err) {
+
+  const timer = setInterval(async () => {
+    try {
+      const status = await getStatus(id);
+
+      if (status.startsWith("STATUS_OK")) {
         clearInterval(timer);
-        reject(err);
+        sessions.delete(userId);
+        await setStatus(id, 6);
+        const code = status.split(":")[1];
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          editMsgId,
+          null,
+          `🎉 *SMS Code Received!*\n\n🔑 Code: \`${code}\`\n📱 Number: \`${phone}\``,
+          {
+            parse_mode: "Markdown",
+            ...mainMenuKeyboard(false),
+          }
+        );
+        return;
       }
-    }, intervalMs);
-  });
+
+      if (status === "STATUS_CANCEL") {
+        clearInterval(timer);
+        sessions.delete(userId);
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          editMsgId,
+          null,
+          `❌ Number \`${phone}\` was cancelled.`,
+          { parse_mode: "Markdown", ...mainMenuKeyboard(false) }
+        );
+        return;
+      }
+
+      if (Date.now() - start >= timeoutMs) {
+        clearInterval(timer);
+        sessions.delete(userId);
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          editMsgId,
+          null,
+          `⏰ Timed out waiting for SMS on \`${phone}\`.\nNo code received within 2 minutes.`,
+          { parse_mode: "Markdown", ...mainMenuKeyboard(false) }
+        );
+      }
+    } catch (err) {
+      clearInterval(timer);
+      sessions.delete(userId);
+    }
+  }, intervalMs);
 }
 
-bot.start((ctx) => {
-  ctx.reply(
-    `👋 Welcome to the SMS Number Bot!\n\n` +
-      `Commands:\n` +
-      `📱 /get\\_number — Get a new phone number\n` +
-      `🔄 /check — Check status of your active number\n` +
-      `❌ /cancel — Cancel your active number\n` +
-      `ℹ️ /help — Show this message`,
-    { parse_mode: "Markdown" }
-  );
-});
-
-bot.help((ctx) => {
-  ctx.reply(
-    `Commands:\n` +
-      `📱 /get\\_number — Get a new phone number\n` +
-      `🔄 /check — Check status of your active number\n` +
-      `❌ /cancel — Cancel your active number`,
-    { parse_mode: "Markdown" }
-  );
-});
-
-bot.command("get_number", async (ctx) => {
+async function handleGetNumber(ctx, serviceKey) {
   const userId = ctx.from.id;
+  await ctx.answerCbQuery();
 
   if (sessions.has(userId)) {
     const { phone } = sessions.get(userId);
-    return ctx.reply(
-      `⚠️ You already have an active number: \`${phone}\`\nUse /cancel first to get a new one.`,
-      { parse_mode: "Markdown" }
+    return ctx.editMessageText(
+      `⚠️ You already have an active number: \`${phone}\`\nCancel it first before getting a new one.`,
+      { parse_mode: "Markdown", ...mainMenuKeyboard(true) }
     );
   }
 
-  const msg = await ctx.reply("⏳ Requesting a phone number...");
+  const svcLabel = SERVICES[serviceKey].label;
+  await ctx.editMessageText(`⏳ Requesting a ${svcLabel} number...`);
 
   try {
-    const { id, phone } = await getNumber();
-    sessions.set(userId, { id, phone, startedAt: Date.now() });
+    const { id, phone } = await getNumber(serviceKey);
+    sessions.set(userId, { id, phone, serviceKey, startedAt: Date.now() });
 
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      msg.message_id,
-      null,
-      `✅ *Your number is ready!*\n\n📱 \`${phone}\`\n\n⏳ Waiting for SMS code (up to 2 min)...`,
-      { parse_mode: "Markdown" }
+    const sent = await ctx.editMessageText(
+      `✅ *Number Ready!*\n\n📱 \`${phone}\`\n🌐 Service: ${svcLabel}\n\n⏳ Waiting for SMS code (up to 2 min)...`,
+      { parse_mode: "Markdown", ...mainMenuKeyboard(true) }
     );
 
-    const code = await pollForSms(ctx, id);
-    sessions.delete(userId);
-    await setStatus(id, 6);
-
-    await ctx.reply(
-      `🎉 *SMS Code Received!*\n\n🔑 Code: \`${code}\`\n📱 Number: \`${phone}\``,
-      { parse_mode: "Markdown" }
-    );
+    const msgId = sent.message_id ?? ctx.callbackQuery.message.message_id;
+    await startPolling(ctx, userId, id, phone, msgId);
   } catch (err) {
     sessions.delete(userId);
-    await ctx.reply(`❌ Error: ${err.message}`);
+    await ctx.editMessageText(`❌ Failed to get number: ${err.message}`, {
+      ...mainMenuKeyboard(false),
+    });
   }
+}
+
+bot.start(async (ctx) => {
+  const userId = ctx.from.id;
+  await ctx.reply(
+    `👋 *Welcome to SMS Number Bot!*\n\nChoose a service to get a phone number:`,
+    { parse_mode: "Markdown", ...mainMenuKeyboard(sessions.has(userId)) }
+  );
 });
 
-bot.command("check", async (ctx) => {
+bot.action("get_cambodia", (ctx) => handleGetNumber(ctx, "cambodia"));
+bot.action("get_other", (ctx) => handleGetNumber(ctx, "other"));
+
+bot.action("check", async (ctx) => {
   const userId = ctx.from.id;
+  await ctx.answerCbQuery();
   const session = sessions.get(userId);
 
   if (!session) {
-    return ctx.reply("ℹ️ You have no active number. Use /get_number to get one.");
+    return ctx.editMessageText(
+      `ℹ️ You have no active number.\nChoose a service below to get one:`,
+      { ...mainMenuKeyboard(false) }
+    );
   }
 
   try {
@@ -138,43 +186,48 @@ bot.command("check", async (ctx) => {
       const code = status.split(":")[1];
       sessions.delete(userId);
       await setStatus(session.id, 6);
-      return ctx.reply(
+      return ctx.editMessageText(
         `🎉 *SMS Code Received!*\n\n🔑 Code: \`${code}\`\n📱 Number: \`${session.phone}\``,
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown", ...mainMenuKeyboard(false) }
       );
     }
 
-    ctx.reply(
-      `📊 *Status Update*\n\n📱 Number: \`${session.phone}\`\n🕐 Status: ${status}\n⏱ Elapsed: ${elapsed}s`,
-      { parse_mode: "Markdown" }
+    await ctx.editMessageText(
+      `📊 *Status Update*\n\n📱 Number: \`${session.phone}\`\n🕐 Status: ${status}\n⏱ Elapsed: ${elapsed}s\n\n⏳ Still waiting for SMS...`,
+      { parse_mode: "Markdown", ...mainMenuKeyboard(true) }
     );
   } catch (err) {
-    ctx.reply(`❌ Error checking status: ${err.message}`);
+    await ctx.editMessageText(`❌ Error: ${err.message}`, {
+      ...mainMenuKeyboard(true),
+    });
   }
 });
 
-bot.command("cancel", async (ctx) => {
+bot.action("cancel", async (ctx) => {
   const userId = ctx.from.id;
+  await ctx.answerCbQuery();
   const session = sessions.get(userId);
 
   if (!session) {
-    return ctx.reply("ℹ️ You have no active number to cancel.");
+    return ctx.editMessageText(
+      `ℹ️ You have no active number to cancel.`,
+      { ...mainMenuKeyboard(false) }
+    );
   }
 
   try {
     await setStatus(session.id, 8);
-    sessions.delete(userId);
-    ctx.reply(`✅ Number \`${session.phone}\` has been cancelled.`, {
-      parse_mode: "Markdown",
-    });
-  } catch (err) {
-    sessions.delete(userId);
-    ctx.reply(`⚠️ Cancelled locally (API error: ${err.message})`);
-  }
+  } catch (_) {}
+
+  sessions.delete(userId);
+  await ctx.editMessageText(
+    `✅ Number \`${session.phone}\` has been cancelled.\n\nChoose a service to get a new number:`,
+    { parse_mode: "Markdown", ...mainMenuKeyboard(false) }
+  );
 });
 
 bot.launch(() => {
-  console.log("🤖 Telegram bot is running...");
+  console.log("🤖 Telegram bot is running with inline keyboards...");
 });
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
