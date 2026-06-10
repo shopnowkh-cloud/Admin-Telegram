@@ -81,6 +81,13 @@ function formatDate(ts) {
   });
 }
 
+function stripCountryCode(phone) {
+  if (phone.startsWith("855")) return phone.slice(3);
+  if (phone.startsWith("66"))  return phone.slice(2);
+  if (phone.startsWith("84"))  return phone.slice(2);
+  return phone;
+}
+
 async function smsApiGet(params) {
   const qs = Object.entries({ api_key: API_KEY, ...params })
     .map(([k, v]) => `${k}=${v}`)
@@ -125,20 +132,21 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
       if (status.startsWith("STATUS_OK")) {
         clearInterval(timer);
         sessions.delete(userId);
-        const code = status.split(":")[1];
+        const code        = status.slice("STATUS_OK:".length);
+        const displayPhone = stripCountryCode(phone);
         try { await setStatus(id, 6); } catch (_) {}
 
         updateHistoryEntry(id, { code, status: "✅ Received", completedAt: Date.now() });
 
         await bot.telegram.editMessageText(
           chatId, waitingMsgId, null,
-          `✅ Number: \`${phone}\` | ${svcLabel}`,
+          `✅ Number: \`${displayPhone}\` | ${svcLabel}`,
           { parse_mode: "Markdown" }
         ).catch(() => {});
 
         await bot.telegram.sendMessage(
           chatId,
-          `🎉 *SMS Code Received!*\n\n🔑 Code: \`${code}\`\n📱 Number: \`${phone}\``,
+          `🎉 *SMS Code Received!*\n\n${code}`,
           { parse_mode: "Markdown", ...mainMenu() }
         ).catch((e) => console.error("sendMessage error:", e.message));
         return;
@@ -150,7 +158,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         updateHistoryEntry(id, { status: "❌ Cancelled", completedAt: Date.now() });
         await bot.telegram.sendMessage(
           chatId,
-          `❌ Number \`${phone}\` was cancelled.`,
+          `❌ Number \`${stripCountryCode(phone)}\` was cancelled.`,
           { parse_mode: "Markdown", ...mainMenu() }
         ).catch(() => {});
         return;
@@ -162,7 +170,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
         updateHistoryEntry(id, { status: "⏰ Timeout", completedAt: Date.now() });
         await bot.telegram.sendMessage(
           chatId,
-          `⏰ *Timed out!* No SMS in 2 min for \`${phone}\`.`,
+          `⏰ *Timed out!* No SMS in 2 min for \`${stripCountryCode(phone)}\`.`,
           { parse_mode: "Markdown", ...mainMenu() }
         ).catch(() => {});
         return;
@@ -171,7 +179,7 @@ function startAutoPolling(userId, chatId, waitingMsgId, id, phone, svcLabel) {
       const spin = DOTS[tickCount % DOTS.length];
       await bot.telegram.editMessageText(
         chatId, waitingMsgId, null,
-        `${spin} *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}`,
+        `${spin} *Waiting for SMS...*\n\n📱 Number: \`${stripCountryCode(phone)}\`\n🌐 Service: ${svcLabel}`,
         { parse_mode: "Markdown" }
       ).catch(() => {});
 
@@ -197,7 +205,7 @@ async function handleGetNumber(ctx, serviceKey) {
 
     const waitMsg = await bot.telegram.sendMessage(
       chatId,
-      `⏳ *Waiting for SMS...*\n\n📱 Number: \`${phone}\`\n🌐 Service: ${svcLabel}`,
+      `⏳ *Waiting for SMS...*\n\n📱 Number: \`${stripCountryCode(phone)}\`\n🌐 Service: ${svcLabel}`,
       { parse_mode: "Markdown", ...mainMenu() }
     );
 
