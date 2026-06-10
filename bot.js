@@ -27,7 +27,7 @@ const BTN = {
 const SERVICES = {
   [BTN.CAMBODIA]: { label: BTN.CAMBODIA, service: "2839", server: "1"  },
   [BTN.THAILAND]: { label: BTN.THAILAND, service: "ot",   server: "10" },
-  [BTN.VIETNAM]:  { label: BTN.VIETNAM,  service: "eg",   server: "33" },
+  [BTN.VIETNAM]:  { label: BTN.VIETNAM,  service: "2839", server: "32" },
 };
 
 function mainMenu(hasActive) {
